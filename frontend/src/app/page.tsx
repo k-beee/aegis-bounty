@@ -50,8 +50,8 @@ export default function Home() {
   const factoryAddress = "0xf3696DF739f725951DaEC63488FB5D9B1719Ee50";
 
   // Vault state
-  const [vaultPool, setVaultPool] = useState("10.00");
-  const [depositValue, setDepositValue] = useState("2.5");
+  const [vaultPool, setVaultPool] = useState("0.00");
+  const [depositValue, setDepositValue] = useState("5.0");
   const [isDepositing, setIsDepositing] = useState(false);
 
   // Report state

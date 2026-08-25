@@ -47,3 +47,10 @@ class AegisBounty(gl.Contract):
         self.high_bps = high_bps
         self.medium_bps = medium_bps
         self.reports_count = u256(0)
+
+    @gl.public.write.payable
+    def fund_bounty_pool(self) -> None:
+        """Protocol admin or donors deposit native GEN into the bounty pool."""
+        if gl.message.value <= 0:
+            gl.vm.UserError("Deposit value must be greater than 0")
+        self.bounty_pool = u256(int(self.bounty_pool) + int(gl.message.value))

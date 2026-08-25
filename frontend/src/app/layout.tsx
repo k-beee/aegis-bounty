@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AegisBounty | Decentralized Exploit Adjudicator",
+  title: "AegisBounty | Security Research & Exploit Adjudication",
   description: "Autonomous Bug Bounty Protocol on GenLayer with Multi-Validator Live PoC Consensus",
 };
 
@@ -12,8 +12,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className="min-h-screen bg-[#05070c] text-[#e1e7f0] antialiased selection:bg-[#00f0ff] selection:text-black">
+    <html lang="en" className="light">
+      <body className="min-h-screen bg-[#f8fafc] text-[#0f172a] antialiased selection:bg-rose-500 selection:text-white">
         {children}
       </body>
     </html>

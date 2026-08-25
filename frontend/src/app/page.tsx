@@ -115,16 +115,41 @@ export default function Home() {
     setTimeout(() => setCopiedAddress(null), 2000);
   };
 
-  const handleDeposit = () => {
+  const handleDeposit = async () => {
     if (!account) {
       setIsWalletModalOpen(true);
       return;
     }
     setIsDepositing(true);
-    setTimeout(() => {
-      setVaultPool((prev) => (parseFloat(prev) + parseFloat(depositValue)).toFixed(2));
-      setIsDepositing(false);
-    }, 1200);
+
+    // If MetaMask / Injected Web3 wallet is available, pop up real transaction signature
+    if (typeof window !== "undefined" && (window as any).ethereum) {
+      try {
+        const valInWei = BigInt(Math.floor(parseFloat(depositValue || "1") * 1e18));
+        const hexVal = "0x" + valInWei.toString(16);
+
+        await (window as any).ethereum.request({
+          method: "eth_sendTransaction",
+          params: [
+            {
+              from: account,
+              to: arbiterAddress,
+              value: hexVal,
+              data: "0x34460773", // fund_bounty_pool()
+            },
+          ],
+        });
+      } catch (err: any) {
+        console.warn("Wallet prompt status:", err);
+        if (err?.code === 4001 || err?.message?.includes("User rejected")) {
+          setIsDepositing(false);
+          return;
+        }
+      }
+    }
+
+    setVaultPool((prev) => (parseFloat(prev) + parseFloat(depositValue)).toFixed(2));
+    setIsDepositing(false);
   };
 
   const handleInteractiveDemo = () => {
@@ -135,11 +160,33 @@ export default function Home() {
     handleAdjudicateSimulation();
   };
 
-  const handleAdjudicateSimulation = () => {
+  const handleAdjudicateSimulation = async () => {
     if (!account) {
       setIsWalletModalOpen(true);
       return;
     }
+
+    // Trigger MetaMask signature for resolve_bounty_report
+    if (typeof window !== "undefined" && (window as any).ethereum) {
+      try {
+        await (window as any).ethereum.request({
+          method: "eth_sendTransaction",
+          params: [
+            {
+              from: account,
+              to: arbiterAddress,
+              data: "0x892a0614", // resolve_bounty_report(0)
+            },
+          ],
+        });
+      } catch (err: any) {
+        console.warn("Wallet prompt note:", err);
+        if (err?.code === 4001 || err?.message?.includes("User rejected")) {
+          return;
+        }
+      }
+    }
+
     setIsAdjudicating(true);
     setAdjudicationStage(1);
 
@@ -151,8 +198,12 @@ export default function Home() {
           setAdjudicationStage(4);
           setTimeout(() => {
             setIsAdjudicating(false);
-            const payoutAmount = (parseFloat(vaultPool) * 0.5).toFixed(2);
-            setVaultPool((prev) => (parseFloat(prev) - parseFloat(payoutAmount)).toFixed(2));
+            const poolFloat = parseFloat(vaultPool) > 0 ? parseFloat(vaultPool) : 10.0;
+            const payoutAmount = (poolFloat * 0.5).toFixed(2);
+            setVaultPool((prev) => {
+              const current = parseFloat(prev);
+              return current > parseFloat(payoutAmount) ? (current - parseFloat(payoutAmount)).toFixed(2) : "0.00";
+            });
             setReports((prev) => [
               {
                 id: String(prev.length),

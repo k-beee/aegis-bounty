@@ -10,6 +10,22 @@ STATUS_SETTLED = "SETTLED"
 STATUS_REJECTED = "REJECTED"
 
 
+def _to_address(val) -> Address:
+    if isinstance(val, Address):
+        return val
+    if isinstance(val, str):
+        return Address(val)
+    if isinstance(val, int):
+        hex_str = hex(val)
+        hex_body = hex_str[2:].rjust(40, "0")
+        return Address("0x" + hex_body)
+    return Address(str(val))
+
+
+def _normalize_address(addr: str) -> str:
+    return addr.strip().lower()
+
+
 class AegisBounty(gl.Contract):
     protocol_admin: Address
     protocol_name: str

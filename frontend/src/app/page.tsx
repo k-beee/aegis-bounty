@@ -39,8 +39,8 @@ export default function Home() {
   const [account, setAccount] = useState<string | null>(null);
 
   // Contract Addresses (StudioNet)
-  const [arbiterAddress] = useState<string>("0xPendingStudioNetDeploy");
-  const [factoryAddress] = useState<string>("0xPendingFactoryDeploy");
+  const [arbiterAddress] = useState<string>("0x0c88a8916A09464d00f265fe6349E4C13EF7296c");
+  const [factoryAddress] = useState<string>("0xf3696DF739f725951DaEC63488FB5D9B1719Ee50");
 
   // Vault state
   const [vaultState, setVaultState] = useState({

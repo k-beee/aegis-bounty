@@ -30,12 +30,15 @@ import {
   FileCheck,
   Scale,
   Zap,
+  Radio,
+  Search,
+  SlidersHorizontal,
+  Flame,
+  PlusCircle,
 } from "lucide-react";
 
 export default function Home() {
-  const [role, setRole] = useState<"protocol" | "researcher">("protocol");
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
-  const [showWelcomeGuide, setShowWelcomeGuide] = useState<boolean>(true);
   const [isWalletModalOpen, setIsWalletModalOpen] = useState<boolean>(false);
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
 
@@ -47,36 +50,33 @@ export default function Home() {
   const factoryAddress = "0xf3696DF739f725951DaEC63488FB5D9B1719Ee50";
 
   // Vault state
-  const [vaultState, setVaultState] = useState({
-    protocolName: "Aegis Vault Alpha",
-    bountyPool: "10.00",
-    securityCharter: "In-scope: Reentrancy, unauthorized fund drain, oracle price manipulation, and contract freeze. Out-of-scope: UI bugs and DDoS.",
-    criticalBps: 5000, // 50%
-    highBps: 2000,     // 20%
-    mediumBps: 500,    // 5%
-    totalReports: 1,
-  });
+  const [vaultPool, setVaultPool] = useState("10.00");
+  const [depositValue, setDepositValue] = useState("2.5");
+  const [isDepositing, setIsDepositing] = useState(false);
 
-  // Active Report state
-  const [reportState, setReportState] = useState({
-    reportId: "0",
-    researcher: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    title: "Critical reentrancy vulnerability in withdrawal logic",
-    pocUrl: "https://github.com/torvalds/linux",
-    status: "SUBMITTED",
-    severity: "CRITICAL",
-    confidenceBps: 9200,
-    payout: "5.00",
-    reasoning: "PoC reproduces cross-contract reentrancy draining liquidity before balance update. Meets in-scope charter definition.",
-  });
+  // Report state
+  const [reports, setReports] = useState([
+    {
+      id: "0",
+      title: "Cross-contract reentrancy in liquidity withdrawal hook",
+      researcher: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      pocUrl: "https://github.com/torvalds/linux",
+      status: "SETTLED",
+      severity: "CRITICAL",
+      confidenceBps: 9200,
+      payout: "5.00",
+      reasoning: "PoC reproduces reentrancy draining pool reserves before balance updates. In-scope critical exploit.",
+      timestamp: "Today at 11:42 AM",
+    },
+  ]);
 
-  // Action states
-  const [activeTab, setActiveTab] = useState<"fund" | "submit" | "resolve">("fund");
-  const [depositAmount, setDepositAmount] = useState("5.0");
-  const [reportTitleInput, setReportTitleInput] = useState("Reentrancy vulnerability in withdrawal hook");
-  const [pocUrlInput, setPocUrlInput] = useState("https://github.com/torvalds/linux");
-  const [txStep, setTxStep] = useState<"idle" | "signing" | "pending" | "FINALIZED">("idle");
-  const [activePipelineStep, setActivePipelineStep] = useState<number>(0);
+  // Submission Form State
+  const [claimTitle, setClaimTitle] = useState("Arbitrary storage overwrite via unvalidated delegatecall");
+  const [claimedSeverity, setClaimedSeverity] = useState<"CRITICAL" | "HIGH" | "MEDIUM" | "LOW">("CRITICAL");
+  const [pocUrl, setPocUrl] = useState("https://github.com/torvalds/linux");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAdjudicating, setIsAdjudicating] = useState(false);
+  const [adjudicationStage, setAdjudicationStage] = useState<number>(0);
 
   // Browser Wallet Injection Detection
   const handleConnectInjected = async () => {
@@ -115,77 +115,64 @@ export default function Home() {
     setTimeout(() => setCopiedAddress(null), 2000);
   };
 
-  const handleToggleRole = () => {
-    setRole((prev) => (prev === "protocol" ? "researcher" : "protocol"));
-  };
-
-  const loadSamplePreset = () => {
-    setAccount("0x5B38Da6a701c568545dCfcB03FcB875f56beddC4");
-    setActiveTab("resolve");
-    setShowWelcomeGuide(false);
-  };
-
-  const runAction = async (actionName: "fund" | "submit" | "resolve") => {
+  const handleDeposit = () => {
     if (!account) {
       setIsWalletModalOpen(true);
       return;
     }
-
-    setTxStep("signing");
-
+    setIsDepositing(true);
     setTimeout(() => {
-      setTxStep("pending");
-      setActivePipelineStep(1);
-
-      if (actionName === "resolve") {
-        setTimeout(() => {
-          setActivePipelineStep(2);
-          setTimeout(() => {
-            setActivePipelineStep(3);
-            setTimeout(() => {
-              setActivePipelineStep(4);
-              setTxStep("FINALIZED");
-              setReportState((prev) => ({ ...prev, status: "SETTLED" }));
-              setVaultState((prev) => ({ ...prev, bountyPool: "5.00" }));
-            }, 1000);
-          }, 1200);
-        }, 1200);
-      } else if (actionName === "fund") {
-        setTimeout(() => {
-          setTxStep("FINALIZED");
-          const newPool = (parseFloat(vaultState.bountyPool) + parseFloat(depositAmount)).toFixed(2);
-          setVaultState((prev) => ({ ...prev, bountyPool: newPool }));
-          setActiveTab("submit");
-        }, 1200);
-      } else if (actionName === "submit") {
-        setTimeout(() => {
-          setTxStep("FINALIZED");
-          setReportState((prev) => ({
-            ...prev,
-            title: reportTitleInput,
-            pocUrl: pocUrlInput,
-            status: "SUBMITTED",
-          }));
-          setActiveTab("resolve");
-        }, 1200);
-      }
-    }, 1000);
+      setVaultPool((prev) => (parseFloat(prev) + parseFloat(depositValue)).toFixed(2));
+      setIsDepositing(false);
+    }, 1200);
   };
 
-  const faqs = [
-    {
-      q: "Why do bug bounties need GenLayer intelligent contracts?",
-      a: "In traditional bug bounties, protocol founders have an economic incentive to downplay critical severity to avoid paying $50k+ bounties, while security researchers fear uncompensated disclosures. AegisBounty locks protocol reward pools on-chain and uses multi-validator AI consensus over live exploit proof-of-concept repositories to adjudicate severity fairly.",
-    },
-    {
-      q: "How is the reward amount calculated and disbursed?",
-      a: "When validators classify a confirmed exploit, the smart contract automatically executes a native emit_transfer of the corresponding severity percentage (CRITICAL = 50%, HIGH = 20%, MEDIUM = 5%) directly from the on-chain vault to the researcher's wallet address.",
-    },
-    {
-      q: "How does the Equivalence Principle prevent arbitrary scoring?",
-      a: "Validators independently render the live PoC URL via web.render, analyze the reproduction code against the protocol's security charter, and require exact severity matching with a confidence tolerance window <= 15% before payout.",
-    },
-  ];
+  const handleInteractiveDemo = () => {
+    setAccount("0x70997970C51812dc3A010C7d01b50e0d17dc79C8");
+    setClaimTitle("Critical fund drain in token reserve vault");
+    setClaimedSeverity("CRITICAL");
+    setPocUrl("https://github.com/torvalds/linux");
+    handleAdjudicateSimulation();
+  };
+
+  const handleAdjudicateSimulation = () => {
+    if (!account) {
+      setIsWalletModalOpen(true);
+      return;
+    }
+    setIsAdjudicating(true);
+    setAdjudicationStage(1);
+
+    setTimeout(() => {
+      setAdjudicationStage(2);
+      setTimeout(() => {
+        setAdjudicationStage(3);
+        setTimeout(() => {
+          setAdjudicationStage(4);
+          setTimeout(() => {
+            setIsAdjudicating(false);
+            const payoutAmount = (parseFloat(vaultPool) * 0.5).toFixed(2);
+            setVaultPool((prev) => (parseFloat(prev) - parseFloat(payoutAmount)).toFixed(2));
+            setReports((prev) => [
+              {
+                id: String(prev.length),
+                title: claimTitle,
+                researcher: account || "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+                pocUrl: pocUrl,
+                status: "SETTLED",
+                severity: claimedSeverity,
+                confidenceBps: 9450,
+                payout: payoutAmount,
+                reasoning: "Live PoC verified. Multi-validator quorum confirmed critical state corruption and issued native emit_transfer payout.",
+                timestamp: "Just now",
+              },
+              ...prev,
+            ]);
+          }, 800);
+        }, 1200);
+      }, 1200);
+    }, 1000);
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-800">
@@ -193,8 +180,6 @@ export default function Home() {
         connectedAccount={account}
         onOpenConnectModal={() => setIsWalletModalOpen(true)}
         onDisconnect={() => setAccount(null)}
-        activeRole={role}
-        onToggleRole={handleToggleRole}
       />
 
       <WalletModal
@@ -205,509 +190,404 @@ export default function Home() {
       />
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8">
-        {/* Luminous Welcome & Onboarding Banner */}
-        {showWelcomeGuide && (
-          <div className="relative overflow-hidden rounded-3xl bg-white border border-rose-200/80 p-7 shadow-lg shadow-rose-500/5">
-            <button
-              onClick={() => setShowWelcomeGuide(false)}
-              className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 transition-all"
-              title="Dismiss Guide"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-2.5 w-2.5 rounded-full bg-rose-500 animate-ping" />
-                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-rose-600">
-                    GenLayer Security Research Protocol
-                  </span>
-                </div>
-                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-                  Welcome to AegisBounty on StudioNet
-                </h2>
-                <p className="text-xs sm:text-sm text-slate-600 max-w-2xl leading-relaxed">
-                  AegisBounty is an autonomous bug bounty adjudication control plane. Protocols lock reward pools
-                  on-chain, whitehats submit live exploit reproduction repositories, and GenLayer validators evaluate
-                  vulnerability severity to trigger automated payouts.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3 shrink-0">
-                <button
-                  onClick={loadSamplePreset}
-                  className="px-5 py-3 rounded-2xl bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-600 text-white text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-2 shadow-md shadow-rose-600/25 hover:shadow-lg transition-all"
-                >
-                  <PlayCircle className="w-4 h-4" />
-                  <span>1-Click Interactive Demo</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 3-Step Visual Flow */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-100">
-              <div className="bg-slate-50/80 border border-slate-200/70 rounded-2xl p-4 space-y-1.5">
-                <div className="flex items-center gap-2 text-xs font-mono text-rose-600 font-bold">
-                  <span className="w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center text-xs">1</span>
-                  <span>Protocol Locks Bounty Pool</span>
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed font-sans">
-                  Protocol admin deposits native GEN into the vault and publishes binding scope rules.
-                </p>
-              </div>
-
-              <div className="bg-slate-50/80 border border-slate-200/70 rounded-2xl p-4 space-y-1.5">
-                <div className="flex items-center gap-2 text-xs font-mono text-amber-600 font-bold">
-                  <span className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-xs">2</span>
-                  <span>Whitehat Submits PoC</span>
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed font-sans">
-                  Researcher submits reproduction link (GitHub repository, Gist, or commit diff).
-                </p>
-              </div>
-
-              <div className="bg-slate-50/80 border border-slate-200/70 rounded-2xl p-4 space-y-1.5">
-                <div className="flex items-center gap-2 text-xs font-mono text-emerald-600 font-bold">
-                  <span className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-xs">3</span>
-                  <span>AI Exploit Adjudication</span>
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed font-sans">
-                  Validators fetch live code, classify severity, and disburse on-chain rewards.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Hero Section */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-slate-200 pb-6">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 font-semibold border border-rose-200 uppercase tracking-wider">
-                Autonomous Exploit Adjudicator
-              </span>
-              <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold border border-emerald-200">
-                StudioNet Live
-              </span>
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-              AegisBounty Security Workspace
-            </h1>
-            <p className="text-sm text-slate-600 max-w-2xl leading-relaxed">
-              Decentralized bug bounty and vulnerability disclosure control plane with Equivalence Principle multi-node
-              consensus over live exploit proof-of-concepts.
-            </p>
-          </div>
-
-          {/* Institutional Treasury Overview */}
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="bg-white border border-slate-200 rounded-2xl px-5 py-3 shadow-xs text-right">
-              <div className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-medium">
-                Active Bounty Vault
-              </div>
-              <div className="text-2xl font-extrabold font-mono text-rose-600">{vaultState.bountyPool} GEN</div>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-2xl px-5 py-3 shadow-xs text-right">
-              <div className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-medium">Gas Model</div>
-              <div className="text-2xl font-extrabold font-mono text-emerald-600">0 GEN (Gasless)</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Contract Explorer Badges */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="crystal-panel rounded-2xl p-4 flex items-center justify-between">
-            <div className="space-y-0.5">
+        {/* Protocol Treasury Header */}
+        <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm relative overflow-hidden">
+          <div className="absolute -right-16 -top-16 w-64 h-64 bg-rose-50 rounded-full blur-3xl pointer-events-none" />
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative">
+            <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <Lock className="w-3.5 h-3.5 text-rose-600" />
-                <span className="text-[11px] font-mono text-slate-500 font-bold uppercase tracking-wider">
-                  Core Bug Bounty Vault Instance
+                <span className="text-xs font-mono font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200">
+                  Active Security Vault
+                </span>
+                <span className="text-xs font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>GenLayer StudioNet</span>
                 </span>
               </div>
-              <div className="font-mono text-xs text-slate-800 font-bold">{arbiterAddress}</div>
+              <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
+                Aegis Protocol Bounty Vault Alpha
+              </h1>
+              <p className="text-sm text-slate-600 max-w-2xl leading-relaxed">
+                Smart contracts protected by decentralized multi-validator exploit adjudication. Whitehat researchers
+                submit live reproduction repositories for automated severity evaluation and instant bounty settlement.
+              </p>
             </div>
-            <div className="flex items-center gap-1.5">
+
+            {/* Quick Metrics & 1-Click Interactive Demo Button */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center sm:text-right">
+                <div className="text-[10px] font-mono text-slate-500 uppercase font-bold tracking-wider">
+                  Locked Bounty Pool
+                </div>
+                <div className="text-2xl font-black font-mono text-rose-600">{vaultPool} GEN</div>
+              </div>
+
               <button
-                onClick={() => copyToClipboard(arbiterAddress, "arbiter")}
-                className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-all"
+                onClick={handleInteractiveDemo}
+                className="px-5 py-4 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs font-mono uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-rose-600/20 transition-all hover:shadow-xl"
+              >
+                <PlayCircle className="w-4 h-4" />
+                <span>1-Click Live Demo</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Contract explorer addresses */}
+          <div className="mt-6 pt-6 border-t border-slate-100 flex flex-wrap items-center justify-between gap-4 text-xs font-mono text-slate-500">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-700">Vault Contract:</span>
+              <code className="bg-slate-100 px-2 py-0.5 rounded text-slate-800 font-semibold">{arbiterAddress}</code>
+              <button
+                onClick={() => copyToClipboard(arbiterAddress, "vault")}
+                className="hover:text-rose-600 transition-colors"
                 title="Copy Address"
               >
-                {copiedAddress === "arbiter" ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                {copiedAddress === "vault" ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
               <a
                 href={`https://explorer-studio.genlayer.com/address/${arbiterAddress}`}
                 target="_blank"
                 rel="noreferrer"
-                className="p-2 rounded-xl hover:bg-rose-50 text-rose-600 transition-all"
-                title="View on StudioNet Explorer"
+                className="text-rose-600 hover:underline inline-flex items-center gap-0.5 ml-1"
               >
-                <ExternalLink className="w-4 h-4" />
+                <span>Explorer</span>
+                <ExternalLink className="w-3 h-3" />
               </a>
             </div>
-          </div>
 
-          <div className="crystal-panel rounded-2xl p-4 flex items-center justify-between">
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-2">
-                <Layers className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="text-[11px] font-mono text-slate-500 font-bold uppercase tracking-wider">
-                  Multi-Vault Factory Registry
-                </span>
-              </div>
-              <div className="font-mono text-xs text-slate-800 font-bold">{factoryAddress}</div>
-            </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-700">Factory Registry:</span>
+              <code className="bg-slate-100 px-2 py-0.5 rounded text-slate-800 font-semibold">{factoryAddress}</code>
               <button
                 onClick={() => copyToClipboard(factoryAddress, "factory")}
-                className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-all"
+                className="hover:text-rose-600 transition-colors"
                 title="Copy Address"
               >
-                {copiedAddress === "factory" ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                {copiedAddress === "factory" ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
-              <a
-                href={`https://explorer-studio.genlayer.com/address/${factoryAddress}`}
-                target="_blank"
-                rel="noreferrer"
-                className="p-2 rounded-xl hover:bg-indigo-50 text-indigo-600 transition-all"
-                title="View on StudioNet Explorer"
-              >
-                <ExternalLink className="w-4 h-4" />
-              </a>
             </div>
           </div>
         </div>
 
-        {/* Severity Payout Matrix Badges */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-          <div className="bg-white p-4 rounded-2xl border-2 border-rose-200 shadow-sm">
-            <div className="text-[11px] font-mono text-rose-600 uppercase font-extrabold flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-rose-500" />
-              <span>CRITICAL IMPACT</span>
-            </div>
-            <div className="text-xl font-mono font-extrabold text-slate-900 mt-1">50% POOL</div>
-            <div className="text-xs text-slate-500 mt-0.5">Direct fund drain or freeze</div>
-          </div>
-
-          <div className="bg-white p-4 rounded-2xl border border-amber-200 shadow-sm">
-            <div className="text-[11px] font-mono text-amber-600 uppercase font-extrabold flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-500" />
-              <span>HIGH IMPACT</span>
-            </div>
-            <div className="text-xl font-mono font-extrabold text-slate-900 mt-1">20% POOL</div>
-            <div className="text-xs text-slate-500 mt-0.5">Temporary lock / auth bypass</div>
-          </div>
-
-          <div className="bg-white p-4 rounded-2xl border border-sky-200 shadow-sm">
-            <div className="text-[11px] font-mono text-sky-600 uppercase font-extrabold flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-sky-500" />
-              <span>MEDIUM IMPACT</span>
-            </div>
-            <div className="text-xl font-mono font-extrabold text-slate-900 mt-1">5% POOL</div>
-            <div className="text-xs text-slate-500 mt-0.5">Griefing / gas drain exploit</div>
-          </div>
-
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="text-[11px] font-mono text-slate-500 uppercase font-extrabold flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-slate-400" />
-              <span>LOW / INVALID</span>
-            </div>
-            <div className="text-xl font-mono font-extrabold text-slate-900 mt-1">0% POOL</div>
-            <div className="text-xs text-slate-500 mt-0.5">Spam / out-of-scope report</div>
-          </div>
-        </div>
-
-        {/* Main Work Area */}
+        {/* 3-Column Security Hub Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Left Action Box */}
-          <div className="lg:col-span-7 space-y-6">
-            <div className="crystal-panel rounded-3xl p-7 space-y-6">
-              {/* Tab Selector */}
-              <div className="flex items-center justify-between border-b border-slate-200/80 pb-4">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setActiveTab("fund")}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-mono font-semibold transition-all ${
-                      activeTab === "fund"
-                        ? "bg-rose-600 text-white font-bold shadow-md shadow-rose-600/20"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    1. Fund Vault
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("submit")}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-mono font-semibold transition-all ${
-                      activeTab === "submit"
-                        ? "bg-rose-600 text-white font-bold shadow-md shadow-rose-600/20"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    2. Submit PoC
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("resolve")}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-mono font-semibold transition-all ${
-                      activeTab === "resolve"
-                        ? "bg-rose-600 text-white font-bold shadow-md shadow-rose-600/20"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    3. AI Adjudicate
-                  </button>
+          {/* Column 1: In-Scope Attack Vectors & Fund Vault (4 cols) */}
+          <div className="lg:col-span-4 space-y-6">
+            {/* Scope Charter */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+              <div className="flex items-center gap-2">
+                <Scale className="w-4 h-4 text-rose-600" />
+                <h3 className="text-xs font-mono font-bold text-slate-900 uppercase tracking-wider">
+                  Security Charter &amp; Payout Rules
+                </h3>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed font-sans">
+                Validators grade vulnerability impact against this on-chain binding scope ruleset:
+              </p>
+
+              <div className="space-y-2.5 pt-1">
+                <div className="p-3 rounded-2xl bg-rose-50/70 border border-rose-200/80 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-rose-900 font-mono">CRITICAL SEVERITY</div>
+                    <div className="text-[11px] text-rose-700">Direct fund drain, freeze, or state deadlock</div>
+                  </div>
+                  <span className="text-xs font-mono font-black text-rose-700 bg-white px-2 py-1 rounded-xl shadow-xs">
+                    50% Pool
+                  </span>
                 </div>
-                <span className="text-xs font-mono text-slate-400 font-semibold">
-                  Step {activeTab === "fund" ? "1/3" : activeTab === "submit" ? "2/3" : "3/3"}
-                </span>
+
+                <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200/80 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-amber-900 font-mono">HIGH SEVERITY</div>
+                    <div className="text-[11px] text-amber-700">Temporary asset lock, auth disruption</div>
+                  </div>
+                  <span className="text-xs font-mono font-black text-amber-700 bg-white px-2 py-1 rounded-xl shadow-xs">
+                    20% Pool
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-sky-50/70 border border-sky-200/80 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-sky-900 font-mono">MEDIUM SEVERITY</div>
+                    <div className="text-[11px] text-sky-700">Griefing, gas optimization exploit</div>
+                  </div>
+                  <span className="text-xs font-mono font-black text-sky-700 bg-white px-2 py-1 rounded-xl shadow-xs">
+                    5% Pool
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Protocol Admin Vault Deposit Box */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+              <div className="flex items-center gap-2">
+                <PlusCircle className="w-4 h-4 text-emerald-600" />
+                <h3 className="text-xs font-mono font-bold text-slate-900 uppercase tracking-wider">
+                  Protocol Vault Deposit
+                </h3>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed font-sans">
+                Add native GEN tokens into the bounty pool to back incoming disclosures:
+              </p>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-mono font-bold text-slate-600 uppercase mb-1">
+                    Deposit Amount (GEN)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={depositValue}
+                    onChange={(e) => setDepositValue(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none font-mono"
+                  />
+                </div>
+                <button
+                  onClick={handleDeposit}
+                  disabled={isDepositing}
+                  className="w-full py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs font-mono uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-xs"
+                >
+                  {isDepositing ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                  )}
+                  <span>{account ? "Deposit to Vault" : "Connect Wallet to Deposit"}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 2: Exploit Submission & Live Adjudication Sandbox (8 cols) */}
+          <div className="lg:col-span-8 space-y-6">
+            {/* Interactive Exploit Disclosure Desk */}
+            <div className="bg-white rounded-3xl p-7 border border-slate-200 shadow-sm space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-2.5">
+                  <Bug className="w-5 h-5 text-rose-600" />
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                      Submit Vulnerability for AI Quorum Adjudication
+                    </h2>
+                    <p className="text-xs text-slate-500 font-sans">
+                      Provide reproduction proof. Multi-validator consensus verifies the PoC live on-chain.
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              {!account && (
-                <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <Wallet className="w-5 h-5 text-rose-600" />
-                    <div className="text-xs">
-                      <div className="font-bold text-slate-900 font-mono">Wallet Disconnected</div>
-                      <div className="text-slate-600">Connect Web3 or StudioNet wallet to interact.</div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setIsWalletModalOpen(true)}
-                    className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs font-mono shrink-0 transition-all"
-                  >
-                    Connect
-                  </button>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-mono font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Vulnerability Title &amp; Impact Description
+                  </label>
+                  <input
+                    type="text"
+                    value={claimTitle}
+                    onChange={(e) => setClaimTitle(e.target.value)}
+                    placeholder="e.g. Reentrancy drain in token withdrawal logic..."
+                    className="w-full bg-slate-50 border border-slate-300 focus:border-rose-500 rounded-2xl px-4 py-3 text-xs text-slate-900 focus:outline-none font-mono"
+                  />
                 </div>
-              )}
 
-              {/* Tab 1: Fund */}
-              {activeTab === "fund" && (
-                <div className="space-y-4">
-                  <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 leading-relaxed">
-                    <Info className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                    <div>
-                      <strong className="text-slate-900">Protocol Admin Action:</strong> Deposit native GEN into the
-                      vault pool to fund verified vulnerability disclosures according to the on-chain charter.
-                    </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-mono font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Estimated Severity Impact
+                    </label>
+                    <select
+                      value={claimedSeverity}
+                      onChange={(e) => setClaimedSeverity(e.target.value as any)}
+                      className="w-full bg-slate-50 border border-slate-300 focus:border-rose-500 rounded-2xl px-4 py-3 text-xs text-slate-900 focus:outline-none font-mono"
+                    >
+                      <option value="CRITICAL">CRITICAL (50% Bounty Allocation)</option>
+                      <option value="HIGH">HIGH (20% Bounty Allocation)</option>
+                      <option value="MEDIUM">MEDIUM (5% Bounty Allocation)</option>
+                      <option value="LOW">LOW / INFORMATIONAL (0% Allocation)</option>
+                    </select>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-mono font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                      Deposit Amount (Native GEN Tokens)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      value={depositAmount}
-                      onChange={(e) => setDepositAmount(e.target.value)}
-                      className="w-full bg-white border border-slate-300 focus:border-rose-500 rounded-xl px-4 py-3 text-xs text-slate-900 focus:outline-none font-mono shadow-xs"
-                    />
-                  </div>
-                  <button
-                    onClick={() => runAction("fund")}
-                    disabled={txStep === "signing" || txStep === "pending"}
-                    className="w-full py-3.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs font-mono uppercase tracking-wider flex items-center justify-center space-x-2 transition-all shadow-md"
-                  >
-                    <Lock className="w-4 h-4 text-rose-400" />
-                    <span>{account ? "Deposit & Lock Bounty Pool" : "Connect Wallet to Deposit"}</span>
-                  </button>
-                </div>
-              )}
-
-              {/* Tab 2: Submit */}
-              {activeTab === "submit" && (
-                <div className="space-y-4">
-                  <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 leading-relaxed">
-                    <Info className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                    <div>
-                      <strong className="text-slate-900">Whitehat Action:</strong> Submit your vulnerability
-                      reproduction proof (e.g. GitHub Gist or repository commit diff).
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-mono font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                      Vulnerability Title / Claim
-                    </label>
-                    <input
-                      type="text"
-                      value={reportTitleInput}
-                      onChange={(e) => setReportTitleInput(e.target.value)}
-                      className="w-full bg-white border border-slate-300 focus:border-rose-500 rounded-xl px-4 py-3 text-xs text-slate-900 focus:outline-none font-mono mb-3 shadow-xs"
-                    />
-
-                    <label className="block text-xs font-mono font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                      Exploit PoC Evidence URL (HTTP/HTTPS)
+                    <label className="block text-xs font-mono font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Live PoC Evidence URL (HTTP/HTTPS)
                     </label>
                     <input
                       type="url"
-                      value={pocUrlInput}
-                      onChange={(e) => setPocUrlInput(e.target.value)}
-                      className="w-full bg-white border border-slate-300 focus:border-rose-500 rounded-xl px-4 py-3 text-xs text-slate-900 focus:outline-none font-mono shadow-xs"
+                      value={pocUrl}
+                      onChange={(e) => setPocUrl(e.target.value)}
+                      placeholder="https://github.com/..."
+                      className="w-full bg-slate-50 border border-slate-300 focus:border-rose-500 rounded-2xl px-4 py-3 text-xs text-slate-900 focus:outline-none font-mono"
                     />
                   </div>
-
-                  <button
-                    onClick={() => runAction("submit")}
-                    disabled={txStep === "signing" || txStep === "pending"}
-                    className="w-full py-3.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs font-mono uppercase tracking-wider flex items-center justify-center space-x-2 transition-all shadow-md"
-                  >
-                    <Bug className="w-4 h-4 text-rose-400" />
-                    <span>{account ? "Submit Exploit for Adjudication" : "Connect Wallet to Submit"}</span>
-                  </button>
                 </div>
-              )}
 
-              {/* Tab 3: Resolve */}
-              {activeTab === "resolve" && (
-                <div className="space-y-4">
-                  <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 leading-relaxed">
-                    <Info className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                    <div>
-                      <strong className="text-slate-900">Consensus Action:</strong> Calling{" "}
-                      <code className="text-rose-600 font-bold">resolve_bounty_report()</code> triggers GenLayer
-                      validators to fetch the PoC URL, evaluate severity against the charter, and release payout.
+                {/* Live Consensus Pipeline Tracker when adjudicating */}
+                {isAdjudicating && (
+                  <div className="p-4 rounded-2xl bg-slate-900 text-white space-y-3 font-mono text-xs animate-in fade-in">
+                    <div className="flex items-center justify-between text-[#00f0ff]">
+                      <span className="font-bold flex items-center gap-2">
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>GenLayer Multi-Validator Quorum in Progress...</span>
+                      </span>
+                      <span className="text-slate-400 text-[11px]">Equivalence Principle</span>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-2 text-[10px] text-center">
+                      <div className={`p-2 rounded-lg border ${adjudicationStage >= 1 ? "bg-rose-500/20 border-rose-500 text-rose-300 font-bold" : "border-slate-800 text-slate-500"}`}>
+                        1. Web Render
+                      </div>
+                      <div className={`p-2 rounded-lg border ${adjudicationStage >= 2 ? "bg-rose-500/20 border-rose-500 text-rose-300 font-bold" : "border-slate-800 text-slate-500"}`}>
+                        2. PoC Audit
+                      </div>
+                      <div className={`p-2 rounded-lg border ${adjudicationStage >= 3 ? "bg-rose-500/20 border-rose-500 text-rose-300 font-bold" : "border-slate-800 text-slate-500"}`}>
+                        3. Equiv Quorum
+                      </div>
+                      <div className={`p-2 rounded-lg border ${adjudicationStage >= 4 ? "bg-emerald-500/20 border-emerald-500 text-emerald-300 font-bold" : "border-slate-800 text-slate-500"}`}>
+                        4. emit_transfer
+                      </div>
                     </div>
                   </div>
+                )}
 
-                  <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-2 shadow-xs">
-                    <div className="flex items-center justify-between text-xs font-mono">
-                      <span className="text-slate-500 font-bold uppercase">Live Target PoC URL</span>
-                      <span className="text-rose-600 font-bold">Min Confidence: 70.00%</span>
-                    </div>
-                    <a
-                      href={reportState.pocUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-mono text-xs text-rose-600 hover:underline break-all inline-flex items-center gap-1.5"
-                    >
-                      <Globe className="w-3.5 h-3.5 shrink-0" />
-                      <span>{reportState.pocUrl}</span>
-                    </a>
-                  </div>
-
-                  <button
-                    onClick={() => runAction("resolve")}
-                    disabled={txStep === "signing" || txStep === "pending"}
-                    className="w-full py-4 px-4 rounded-2xl bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-600 text-white font-bold text-xs font-mono uppercase tracking-wider flex items-center justify-center space-x-2 transition-all shadow-lg shadow-rose-600/25 disabled:opacity-50"
-                  >
-                    {txStep === "pending" || txStep === "signing" ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Adjudicating with Multi-Validator Nodes...</span>
-                      </>
-                    ) : (
-                      <>
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>{account ? "Execute AI Severity Consensus" : "Connect Wallet to Adjudicate"}</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
+                <button
+                  onClick={handleAdjudicateSimulation}
+                  disabled={isAdjudicating}
+                  className="w-full py-4 px-6 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs font-mono uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-rose-600/25 transition-all disabled:opacity-50"
+                >
+                  {isAdjudicating ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Validating PoC Across Decentralized Nodes...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>{account ? "Execute resolve_bounty_report() Consensus" : "Connect Wallet to Adjudicate"}</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
-          </div>
 
-          {/* Right State Certificate */}
-          <div className="lg:col-span-5 space-y-6">
-            <div className="crystal-panel-interactive rounded-3xl p-7 space-y-5 bg-white">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3.5">
+            {/* Verified Adjudications Feed */}
+            <div className="space-y-4" id="verified-feed">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Award className="w-5 h-5 text-rose-600" />
+                  <Award className="w-4 h-4 text-slate-900" />
                   <h3 className="text-xs font-mono font-bold text-slate-900 uppercase tracking-wider">
-                    Vulnerability Certificate #0
+                    Verified Adjudication Certificates ({reports.length})
                   </h3>
                 </div>
-                <span
-                  className={`px-3 py-0.5 rounded-full text-xs font-mono font-bold uppercase tracking-wider ${
-                    reportState.status === "SETTLED"
-                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                      : "bg-rose-100 text-rose-800 border border-rose-300"
-                  }`}
-                >
-                  {reportState.status}
-                </span>
+                <span className="text-xs font-mono text-slate-500">Autonomous Settlement Ledger</span>
               </div>
 
-              <div className="space-y-4 font-mono text-xs">
-                <div>
-                  <span className="text-slate-500 text-[11px] block mb-0.5 uppercase tracking-wider font-semibold">
-                    Vulnerability Scope Title
-                  </span>
-                  <span className="text-slate-900 font-sans text-xs font-bold leading-snug block">
-                    {reportState.title}
-                  </span>
-                </div>
+              <div className="space-y-4">
+                {reports.map((report) => (
+                  <div
+                    key={report.id}
+                    className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4 hover:border-slate-300 transition-all"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1 rounded-xl bg-rose-600 text-white font-black text-xs font-mono shadow-xs">
+                          {report.severity}
+                        </span>
+                        <span className="text-xs font-mono font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                          +{report.payout} GEN Emitted
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-mono text-slate-400">{report.timestamp}</span>
+                    </div>
 
-                <div>
-                  <span className="text-slate-500 text-[11px] block mb-1 uppercase tracking-wider font-semibold">
-                    Adjudicated Severity &amp; Reward
-                  </span>
-                  <div className="flex items-center gap-2.5">
-                    <span className="px-3 py-1 rounded-xl bg-rose-600 text-white font-extrabold text-xs shadow-xs">
-                      {reportState.severity}
-                    </span>
-                    <span className="text-emerald-700 font-extrabold text-sm font-mono">
-                      +{reportState.payout} GEN Emitted
-                    </span>
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-bold text-slate-900 font-sans">{report.title}</h4>
+                      <div className="flex flex-wrap items-center gap-3 text-xs font-mono text-slate-500">
+                        <span>
+                          Researcher:{" "}
+                          <strong className="text-slate-800">
+                            {report.researcher.slice(0, 6)}...{report.researcher.slice(-4)}
+                          </strong>
+                        </span>
+                        <span>•</span>
+                        <span>
+                          Confidence:{" "}
+                          <strong className="text-slate-800">{report.confidenceBps / 100}%</strong>
+                        </span>
+                        <span>•</span>
+                        <a
+                          href={report.pocUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-rose-600 hover:underline inline-flex items-center gap-1"
+                        >
+                          <Globe className="w-3 h-3" />
+                          <span>View Reproduction Repo</span>
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs font-sans text-slate-700 italic leading-relaxed">
+                      &ldquo;{report.reasoning}&rdquo;
+                    </div>
                   </div>
-                </div>
-
-                <div>
-                  <span className="text-slate-500 text-[11px] block mb-0.5 uppercase tracking-wider font-semibold">
-                    Validator Consensus Confidence
-                  </span>
-                  <span className="text-slate-900 font-bold">
-                    {reportState.confidenceBps / 100}% ({reportState.confidenceBps} bps)
-                  </span>
-                </div>
-
-                <div>
-                  <span className="text-slate-500 text-[11px] block mb-1 uppercase tracking-wider font-semibold">
-                    Auditor Deliberation Notes
-                  </span>
-                  <p className="text-slate-700 font-sans text-xs bg-slate-50 p-3.5 rounded-2xl border border-slate-200 leading-relaxed italic">
-                    &ldquo;{reportState.reasoning}&rdquo;
-                  </p>
-                </div>
+                ))}
               </div>
             </div>
           </div>
         </div>
 
         {/* FAQ Accordion */}
-        <div className="crystal-panel rounded-3xl p-7 space-y-4">
+        <div className="bg-white rounded-3xl p-7 border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center gap-2">
             <HelpCircle className="w-5 h-5 text-rose-600" />
             <h3 className="text-sm font-bold text-slate-900 font-mono uppercase tracking-wider">
-              Protocol Security Model &amp; Technical Specifications
+              AegisBounty Protocol Architecture &amp; FAQ
             </h3>
           </div>
 
-          <div className="divide-y divide-slate-200/80">
-            {faqs.map((faq, index) => (
-              <div key={index} className="py-3.5">
-                <button
-                  onClick={() => setFaqOpen(faqOpen === index ? null : index)}
-                  className="w-full flex items-center justify-between text-left text-xs sm:text-sm font-semibold text-slate-900 hover:text-rose-600 transition-all"
-                >
-                  <span>{faq.q}</span>
-                  {faqOpen === index ? (
-                    <ChevronUp className="w-4 h-4 text-rose-600 shrink-0 ml-2" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 ml-2" />
-                  )}
-                </button>
-                {faqOpen === index && (
-                  <p className="mt-2 text-xs text-slate-600 leading-relaxed font-sans">{faq.a}</p>
-                )}
-              </div>
-            ))}
+          <div className="divide-y divide-slate-100 text-slate-800">
+            <div className="py-3.5">
+              <button
+                onClick={() => setFaqOpen(faqOpen === 0 ? null : 0)}
+                className="w-full flex items-center justify-between text-left text-xs sm:text-sm font-bold text-slate-900 hover:text-rose-600 transition-all"
+              >
+                <span>How is this completely different from traditional bug bounty platforms?</span>
+                {faqOpen === 0 ? <ChevronUp className="w-4 h-4 text-rose-600" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+              </button>
+              {faqOpen === 0 && (
+                <p className="mt-2 text-xs text-slate-600 leading-relaxed font-sans">
+                  Centralized bounty platforms suffer from counterparty risk: protocol founders often downplay exploit
+                  severity to withhold large payouts, while whitehats fear uncompensated disclosure. AegisBounty locks
+                  the reward pool on-chain in GenLayer and executes payouts autonomously via decentralized multi-validator
+                  AI consensus over live reproduction code.
+                </p>
+              )}
+            </div>
+
+            <div className="py-3.5">
+              <button
+                onClick={() => setFaqOpen(faqOpen === 1 ? null : 1)}
+                className="w-full flex items-center justify-between text-left text-xs sm:text-sm font-bold text-slate-900 hover:text-rose-600 transition-all"
+              >
+                <span>How do validators verify live proof of concept URLs?</span>
+                {faqOpen === 1 ? <ChevronUp className="w-4 h-4 text-rose-600" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+              </button>
+              {faqOpen === 1 && (
+                <p className="mt-2 text-xs text-slate-600 leading-relaxed font-sans">
+                  Validators independently invoke <code className="text-rose-600 font-mono">gl.nondet.web.render()</code> to
+                  fetch the live GitHub repository, commit diff, or Gist. The LLM evaluates the attack vector against the
+                  protocol's published security charter, and the Equivalence Principle enforces exact severity agreement
+                  with confidence matching within &plusmn;15%.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </main>
 
       <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500 font-mono">
-        AegisBounty • Multi-Validator Vulnerability &amp; Bug Bounty Protocol • GenLayer StudioNet
+        AegisBounty • Decentralized Exploit Adjudication Protocol • GenLayer StudioNet
       </footer>
     </div>
   );

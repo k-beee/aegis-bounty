@@ -49,10 +49,21 @@ export default function Home() {
   const arbiterAddress = "0x0c88a8916A09464d00f265fe6349E4C13EF7296c";
   const factoryAddress = "0xf3696DF739f725951DaEC63488FB5D9B1719Ee50";
 
-  // Vault state
-  const [vaultPool, setVaultPool] = useState("0.00");
+  // Vault state with persistence
+  const [vaultPool, setVaultPool] = useState("10.00");
   const [depositValue, setDepositValue] = useState("5.0");
   const [isDepositing, setIsDepositing] = useState(false);
+  const [depositSuccessMsg, setDepositSuccessMsg] = useState<string | null>(null);
+
+  // Load persisted balance on client mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("aegis_vault_pool");
+      if (saved) {
+        setVaultPool(saved);
+      }
+    }
+  }, []);
 
   // Report state
   const [reports, setReports] = useState([
@@ -185,7 +196,15 @@ export default function Home() {
       }
     }
 
-    setVaultPool((prev) => (parseFloat(prev) + parseFloat(depositValue)).toFixed(2));
+    const current = parseFloat(vaultPool) || 0;
+    const added = parseFloat(depositValue) || 5.0;
+    const nextTotal = (current + added).toFixed(2);
+    setVaultPool(nextTotal);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("aegis_vault_pool", nextTotal);
+    }
+    setDepositSuccessMsg(`Successfully added +${added} GEN to active bounty pool!`);
+    setTimeout(() => setDepositSuccessMsg(null), 4000);
     setIsDepositing(false);
   };
 
@@ -443,6 +462,13 @@ export default function Home() {
                   )}
                   <span>{account ? "Deposit to Vault" : "Connect Wallet to Deposit"}</span>
                 </button>
+
+                {depositSuccessMsg && (
+                  <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-mono flex items-center gap-1.5 animate-in fade-in">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{depositSuccessMsg}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

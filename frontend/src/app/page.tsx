@@ -49,20 +49,53 @@ export default function Home() {
   const arbiterAddress = "0x0c88a8916A09464d00f265fe6349E4C13EF7296c";
   const factoryAddress = "0xf3696DF739f725951DaEC63488FB5D9B1719Ee50";
 
-  // Vault state with persistence
-  const [vaultPool, setVaultPool] = useState("10.00");
+  // Vault state
+  const [vaultPool, setVaultPool] = useState("0.00");
   const [depositValue, setDepositValue] = useState("5.0");
   const [isDepositing, setIsDepositing] = useState(false);
   const [depositSuccessMsg, setDepositSuccessMsg] = useState<string | null>(null);
 
-  // Load persisted balance on client mount
-  useEffect(() => {
+  // Live On-Chain Contract Balance Reader from GenLayer RPC
+  const fetchOnChainContractBalance = async () => {
+    try {
+      const res = await fetch("https://studio.genlayer.com/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "eth_getBalance",
+          params: [arbiterAddress, "latest"],
+          id: 1,
+        }),
+      });
+      const data = await res.json();
+      if (data?.result && typeof data.result === "string") {
+        const wei = BigInt(data.result);
+        const genAmount = (Number(wei) / 1e18).toFixed(2);
+        if (parseFloat(genAmount) > 0) {
+          setVaultPool(genAmount);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("aegis_vault_pool", genAmount);
+          }
+          return;
+        }
+      }
+    } catch (e) {
+      // Fallback to local storage if endpoint unavailable
+    }
+
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("aegis_vault_pool");
       if (saved) {
         setVaultPool(saved);
       }
     }
+  };
+
+  useEffect(() => {
+    fetchOnChainContractBalance();
+    const interval = setInterval(fetchOnChainContractBalance, 8000);
+    return () => clearInterval(interval);
   }, []);
 
   // Report state

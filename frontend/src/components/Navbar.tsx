@@ -20,17 +20,14 @@ export function Navbar({
     <header className="border-b border-slate-200/80 bg-white/90 backdrop-blur-xl sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
         {/* Brand identity */}
-        <div className="flex items-center space-x-3.5">
-          <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center shadow-sm">
-            <ShieldAlert className="w-5 h-5 text-rose-500" />
-          </div>
+        <div className="flex items-center space-x-3">
           <div>
             <div className="flex items-center space-x-2">
-              <span className="font-extrabold text-base tracking-tight text-slate-900 font-mono">
+              <span className="font-extrabold text-lg tracking-tight text-slate-900 font-mono">
                 AEGIS<span className="text-rose-600 font-sans font-black">BOUNTY</span>
               </span>
               <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold font-mono border border-slate-300">
-                GENLAYER STUDIO
+                STUDIONET
               </span>
             </div>
             <p className="text-[11px] text-slate-500 font-sans tracking-tight">

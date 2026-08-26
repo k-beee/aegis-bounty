@@ -75,31 +75,18 @@ export default function Home() {
   const arbiterAddress = "0x76AdC982655E37a60a6681936Ba7306390c6a5Ea";
   const factoryAddress = "0xf3696DF739f725951DaEC63488FB5D9B1719Ee50";
 
-  // Vault state
-  const [vaultPool, setVaultPool] = useState("10.00");
+  // Vault state - initialized from on-chain storage
+  const [vaultPool, setVaultPool] = useState("0.00");
   const [depositValue, setDepositValue] = useState("5.0");
   const [isDepositing, setIsDepositing] = useState(false);
   const [depositSuccessMsg, setDepositSuccessMsg] = useState<string | null>(null);
 
-  // Reports state - real on-chain tracking
-  const [reports, setReports] = useState<ReportItem[]>([
-    {
-      id: "0",
-      title: "Cross-contract reentrancy in liquidity withdrawal hook",
-      researcher: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-      pocUrl: "https://github.com/torvalds/linux",
-      status: "SETTLED",
-      severity: "CRITICAL",
-      confidenceBps: 9200,
-      payout: "5.00",
-      reasoning: "PoC reproduces cross-contract reentrancy draining pool reserves before balance updates. In-scope critical exploit.",
-      timestamp: "Initial On-Chain Record",
-      txHash: "0x611b070ef1217cfe8561918f8f5ec9be7fddc65e28ef0cf85de796a8be1ee568",
-    },
-  ]);
+  // Reports state - strictly populated from on-chain queries
+  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [isLoadingReports, setIsLoadingReports] = useState(true);
 
   // Submission Form State
-  const [claimTitle, setClaimTitle] = useState("Arbitrary storage overwrite via unvalidated delegatecall");
+  const [claimTitle, setClaimTitle] = useState("Critical reentrancy drain in token reserve vault");
   const [claimedSeverity, setClaimedSeverity] = useState<"CRITICAL" | "HIGH" | "MEDIUM" | "LOW">("CRITICAL");
   const [pocUrl, setPocUrl] = useState("https://github.com/torvalds/linux");
 
@@ -111,47 +98,47 @@ export default function Home() {
     message?: string;
   }>({ status: "idle" });
 
-  const [activeReportIdToResolve, setActiveReportIdToResolve] = useState<string>("0");
-
-  // Synchronize on-chain balance and reports
+  // Synchronize on-chain balance and reports directly from GenLayer StudioNet RPC
   const syncOnChainData = useCallback(async () => {
     try {
+      // 1. Fetch real on-chain balance
       const balance = await getContractBalance(arbiterAddress);
-      if (parseFloat(balance) > 0) {
-        setVaultPool(balance);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("aegis_vault_pool", balance);
+      setVaultPool(balance);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("aegis_vault_pool", balance);
+      }
+
+      // 2. Fetch real on-chain vault summary to get total reports count
+      const summary = await fetchVaultSummary(arbiterAddress);
+      const totalCount = summary?.total_reports ? parseInt(summary.total_reports, 10) : 0;
+
+      // 3. Fetch all active on-chain reports
+      const loadedReports: ReportItem[] = [];
+      for (let i = 0; i < Math.max(totalCount, 1); i++) {
+        const details = await fetchReportDetails(arbiterAddress, i);
+        if (details && details.title) {
+          loadedReports.push({
+            id: String(i),
+            title: details.title,
+            researcher: details.researcher || "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+            pocUrl: details.poc_url || "https://github.com/torvalds/linux",
+            status: (details.status as any) || "SETTLED",
+            severity: (details.severity as any) || "CRITICAL",
+            confidenceBps: parseInt(details.confidence_bps || "9200", 10),
+            payout: details.payout && details.payout !== "0" ? (Number(BigInt(details.payout)) / 1e18).toFixed(2) : "0.00",
+            reasoning: details.reasoning || "Verified on-chain via GenLayer Equivalence Principle consensus.",
+            timestamp: "On-Chain Record",
+          });
         }
       }
 
-      // Check on-chain report details for report 0
-      const rep0 = await fetchReportDetails(arbiterAddress, 0);
-      if (rep0 && rep0.title) {
-        setReports((prev) => {
-          const updated = [...prev];
-          const idx = updated.findIndex((r) => r.id === "0");
-          const newItem: ReportItem = {
-            id: "0",
-            title: rep0.title || updated[0]?.title || "On-Chain Vulnerability Report #0",
-            researcher: rep0.researcher || updated[0]?.researcher,
-            pocUrl: rep0.poc_url || updated[0]?.pocUrl,
-            status: (rep0.status as any) || "SETTLED",
-            severity: (rep0.severity as any) || "CRITICAL",
-            confidenceBps: parseInt(rep0.confidence_bps || "9200", 10),
-            payout: rep0.payout ? (Number(BigInt(rep0.payout)) / 1e18).toFixed(2) : "5.00",
-            reasoning: rep0.reasoning || updated[0]?.reasoning,
-            timestamp: "On-Chain Verified",
-          };
-          if (idx >= 0) {
-            updated[idx] = newItem;
-          } else {
-            updated.unshift(newItem);
-          }
-          return updated;
-        });
+      if (loadedReports.length > 0) {
+        setReports(loadedReports);
       }
     } catch (err) {
       console.warn("syncOnChainData error:", err);
+    } finally {
+      setIsLoadingReports(false);
     }
   }, [arbiterAddress]);
 
@@ -380,7 +367,6 @@ export default function Home() {
       };
 
       setReports((prev) => [newReport, ...prev]);
-      setActiveReportIdToResolve(nextId);
 
       setTxState({
         status: "confirmed",
@@ -510,10 +496,11 @@ export default function Home() {
 
   const handleInteractiveDemo = () => {
     setAccount("0x70997970C51812dc3A010C7d01b50e0d17dc79C8");
-    setClaimTitle("Critical reentrancy drain in token reserve vault");
+    setClaimTitle("Critical fund drain via reentrancy in token vault");
     setClaimedSeverity("CRITICAL");
     setPocUrl("https://github.com/torvalds/linux");
-    handleSubmitReport();
+    const el = document.getElementById("submit-disclosure");
+    if (el) el.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
@@ -602,7 +589,7 @@ export default function Home() {
                 className="px-5 py-4 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs font-mono uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-rose-600/20 transition-all hover:shadow-xl"
               >
                 <PlayCircle className="w-4 h-4" />
-                <span>1-Click Live Demo</span>
+                <span>1-Click Sample Preset</span>
               </button>
             </div>
           </div>
@@ -742,7 +729,7 @@ export default function Home() {
           </div>
 
           {/* Column 2: Exploit Submission & Live Adjudication (8 cols) */}
-          <div className="lg:col-span-8 space-y-6">
+          <div className="lg:col-span-8 space-y-6" id="submit-disclosure">
             {/* Interactive Exploit Disclosure Desk */}
             <div className="bg-white rounded-3xl p-7 border border-slate-200 shadow-sm space-y-6">
               <div className="flex items-center justify-between border-b border-slate-100 pb-4">
@@ -836,126 +823,136 @@ export default function Home() {
                 <span className="text-xs font-mono text-slate-500">Live GenVM State Reader</span>
               </div>
 
-              <div className="space-y-4">
-                {reports.map((report) => (
-                  <div
-                    key={report.id}
-                    className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4 hover:border-slate-300 transition-all"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono font-bold text-slate-500">Report #{report.id}</span>
-                        <span
-                          className={`px-3 py-1 rounded-xl text-white font-black text-xs font-mono shadow-xs ${
-                            report.severity === "CRITICAL"
-                              ? "bg-rose-600"
-                              : report.severity === "HIGH"
-                              ? "bg-amber-600"
-                              : report.severity === "MEDIUM"
-                              ? "bg-sky-600"
-                              : "bg-slate-600"
-                          }`}
-                        >
-                          {report.severity}
-                        </span>
-                        <span
-                          className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded-full border ${
-                            report.status === "SETTLED"
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : report.status === "REJECTED"
-                              ? "bg-slate-100 text-slate-600 border-slate-300"
-                              : "bg-rose-50 text-rose-700 border-rose-200 animate-pulse"
-                          }`}
-                        >
-                          {report.status}
-                        </span>
-                        {parseFloat(report.payout) > 0 && (
-                          <span className="text-xs font-mono font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
-                            +{report.payout} GEN Emitted
+              {reports.length === 0 ? (
+                <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center space-y-3">
+                  <Bug className="w-8 h-8 text-slate-400 mx-auto" />
+                  <div className="text-sm font-bold text-slate-800">No reports recorded on-chain yet</div>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    Use the form above to submit your vulnerability report or click &ldquo;1-Click Sample Preset&rdquo; to auto-fill.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {reports.map((report) => (
+                    <div
+                      key={report.id}
+                      className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4 hover:border-slate-300 transition-all"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-bold text-slate-500">Report #{report.id}</span>
+                          <span
+                            className={`px-3 py-1 rounded-xl text-white font-black text-xs font-mono shadow-xs ${
+                              report.severity === "CRITICAL"
+                                ? "bg-rose-600"
+                                : report.severity === "HIGH"
+                                ? "bg-amber-600"
+                                : report.severity === "MEDIUM"
+                                ? "bg-sky-600"
+                                : "bg-slate-600"
+                            }`}
+                          >
+                            {report.severity}
                           </span>
-                        )}
-                      </div>
-                      <span className="text-[11px] font-mono text-slate-400">{report.timestamp}</span>
-                    </div>
-
-                    <div className="space-y-2">
-                      <h4 className="text-sm font-bold text-slate-900 font-sans">{report.title}</h4>
-                      <div className="flex flex-wrap items-center gap-3 text-xs font-mono text-slate-500">
-                        <span>
-                          Researcher:{" "}
-                          <strong className="text-slate-800">
-                            {report.researcher.slice(0, 6)}...{report.researcher.slice(-4)}
-                          </strong>
-                        </span>
-                        {report.confidenceBps > 0 && (
-                          <>
-                            <span>•</span>
-                            <span>
-                              Confidence: <strong className="text-slate-800">{report.confidenceBps / 100}%</strong>
+                          <span
+                            className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded-full border ${
+                              report.status === "SETTLED"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : report.status === "REJECTED"
+                                ? "bg-slate-100 text-slate-600 border-slate-300"
+                                : "bg-rose-50 text-rose-700 border-rose-200 animate-pulse"
+                            }`}
+                          >
+                            {report.status}
+                          </span>
+                          {parseFloat(report.payout) > 0 && (
+                            <span className="text-xs font-mono font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                              +{report.payout} GEN Emitted
                             </span>
-                          </>
-                        )}
-                        <span>•</span>
-                        <a
-                          href={report.pocUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-rose-600 hover:underline inline-flex items-center gap-1"
-                        >
-                          <Globe className="w-3 h-3" />
-                          <span>View PoC Link</span>
-                        </a>
+                          )}
+                        </div>
+                        <span className="text-[11px] font-mono text-slate-400">{report.timestamp}</span>
                       </div>
-                    </div>
 
-                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs font-sans text-slate-700 italic leading-relaxed">
-                      &ldquo;{report.reasoning}&rdquo;
-                    </div>
-
-                    {/* Action Bar for Pending Reports */}
-                    {report.status === "SUBMITTED" && (
-                      <div className="pt-2">
-                        <button
-                          onClick={() => handleResolveReport(report.id)}
-                          disabled={txState.status !== "idle"}
-                          className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-bold text-xs font-mono uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition-all disabled:opacity-50"
-                        >
-                          {txState.status !== "idle" && txState.actionName === "resolve_bounty_report" ? (
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-bold text-slate-900 font-sans">{report.title}</h4>
+                        <div className="flex flex-wrap items-center gap-3 text-xs font-mono text-slate-500">
+                          <span>
+                            Researcher:{" "}
+                            <strong className="text-slate-800">
+                              {report.researcher.slice(0, 6)}...{report.researcher.slice(-4)}
+                            </strong>
+                          </span>
+                          {report.confidenceBps > 0 && (
                             <>
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                              <span>Executing resolve_bounty_report({report.id})...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Cpu className="w-4 h-4" />
-                              <span>Trigger resolve_bounty_report({report.id}) Consensus</span>
+                              <span>•</span>
+                              <span>
+                                Confidence: <strong className="text-slate-800">{report.confidenceBps / 100}%</strong>
+                              </span>
                             </>
                           )}
-                        </button>
-                      </div>
-                    )}
-
-                    {report.status === "SETTLED" && (
-                      <div className="pt-1 flex items-center justify-between text-[11px] font-mono text-emerald-700 bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-100">
-                        <span className="flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Finalized &amp; Settled on GenLayer (Guarded against double payout)</span>
-                        </span>
-                        {report.txHash && (
+                          <span>•</span>
                           <a
-                            href={`https://explorer-studio.genlayer.com/tx/${report.txHash}`}
+                            href={report.pocUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="underline text-emerald-800 hover:text-emerald-950"
+                            className="text-rose-600 hover:underline inline-flex items-center gap-1"
                           >
-                            Explorer Tx
+                            <Globe className="w-3 h-3" />
+                            <span>View PoC Link</span>
                           </a>
-                        )}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+
+                      <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs font-sans text-slate-700 italic leading-relaxed">
+                        &ldquo;{report.reasoning}&rdquo;
+                      </div>
+
+                      {/* Action Bar for Pending Reports */}
+                      {report.status === "SUBMITTED" && (
+                        <div className="pt-2">
+                          <button
+                            onClick={() => handleResolveReport(report.id)}
+                            disabled={txState.status !== "idle"}
+                            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-bold text-xs font-mono uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition-all disabled:opacity-50"
+                          >
+                            {txState.status !== "idle" && txState.actionName === "resolve_bounty_report" ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                <span>Executing resolve_bounty_report({report.id})...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Cpu className="w-4 h-4" />
+                                <span>Trigger resolve_bounty_report({report.id}) Consensus</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+
+                      {report.status === "SETTLED" && (
+                        <div className="pt-1 flex items-center justify-between text-[11px] font-mono text-emerald-700 bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-100">
+                          <span className="flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Finalized &amp; Settled on GenLayer (Guarded against double payout)</span>
+                          </span>
+                          {report.txHash && (
+                            <a
+                              href={`https://explorer-studio.genlayer.com/tx/${report.txHash}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="underline text-emerald-800 hover:text-emerald-950"
+                            >
+                              Explorer Tx
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

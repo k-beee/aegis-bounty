@@ -113,15 +113,22 @@ class AegisBounty(gl.Contract):
     @gl.public.write
     def submit_vulnerability_report(self, poc_evidence_url: str, claim_title: str) -> u256:
         """Whitehat researcher submits vulnerability proof of concept URL."""
-        if not poc_evidence_url.startswith("http://") and not poc_evidence_url.startswith("https://"):
-            gl.vm.UserError("PoC evidence URL must be a valid HTTP/HTTPS endpoint")
-        if len(claim_title.strip()) == 0:
+        clean_url = poc_evidence_url.strip()
+        clean_title = claim_title.strip()
+
+        if not clean_url.startswith("http://") and not clean_url.startswith("https://"):
+            gl.vm.UserError("PoC evidence URL must start with http:// or https://")
+        if len(clean_url) > 500:
+            gl.vm.UserError("PoC evidence URL exceeds maximum allowed length of 500 characters")
+        if len(clean_title) == 0:
             gl.vm.UserError("Report title cannot be empty")
+        if len(clean_title) > 200:
+            gl.vm.UserError("Report title exceeds maximum allowed length of 200 characters")
 
         report_id = self.reports_count
         self.report_researcher[report_id] = gl.message.sender_address
-        self.report_poc_url[report_id] = poc_evidence_url
-        self.report_title[report_id] = claim_title
+        self.report_poc_url[report_id] = clean_url
+        self.report_title[report_id] = clean_title
         self.report_status[report_id] = STATUS_SUBMITTED
         self.report_severity[report_id] = "PENDING"
         self.report_payout[report_id] = u256(0)
@@ -136,11 +143,23 @@ class AegisBounty(gl.Contract):
         """
         Validators fetch the live PoC URL, evaluate against the protocol security charter,
         and reach consensus on exploit severity and payout execution.
+        Strict contract guards ensure settled or in-flight reports can never be resolved or paid twice.
         """
+        # Guard 1: Bounds check
         if int(report_id) >= int(self.reports_count):
-            gl.vm.UserError("Report ID does not exist")
-        if self.report_status[report_id] == STATUS_SETTLED:
-            gl.vm.UserError("Report already settled")
+            gl.vm.UserError(f"Report ID {report_id} does not exist")
+
+        # Guard 2: Terminal and in-flight state verification
+        current_status = self.report_status[report_id]
+        if current_status in [STATUS_SETTLED, STATUS_REJECTED, STATUS_RESOLVING]:
+            gl.vm.UserError(f"Report {report_id} already in terminal or processing state: {current_status}. Cannot resolve again.")
+
+        # Guard 3: Double-payout prevention guard
+        if int(self.report_payout[report_id]) > 0:
+            gl.vm.UserError(f"Report {report_id} has already been paid out")
+
+        # Set processing state to prevent re-entrancy or duplicate parallel executions
+        self.report_status[report_id] = STATUS_RESOLVING
 
         poc_url = self.report_poc_url[report_id]
         charter = self.security_charter
@@ -217,7 +236,7 @@ Respond ONLY with a JSON object in this exact schema:
         self.report_confidence[report_id] = u256(conf)
         self.report_reasoning[report_id] = reasoning
 
-        # Calculate payout if confidence >= 70%
+        # Calculate payout strictly if confidence >= 70%
         payout_amount = 0
         if conf >= CONFIDENCE_THRESHOLD_BPS:
             pool_val = int(self.bounty_pool)
@@ -228,9 +247,12 @@ Respond ONLY with a JSON object in this exact schema:
             elif severity == SEVERITY_MEDIUM:
                 payout_amount = (pool_val * int(self.medium_bps)) // 10000
 
+        # Ensure payout cannot exceed available pool
+        payout_amount = min(payout_amount, int(self.bounty_pool))
         self.report_payout[report_id] = u256(payout_amount)
 
-        if payout_amount > 0 and int(self.bounty_pool) >= payout_amount:
+        # Checks-Effects-Interactions: Update state before external transfer
+        if payout_amount > 0:
             self.report_status[report_id] = STATUS_SETTLED
             self.bounty_pool = u256(int(self.bounty_pool) - payout_amount)
             researcher = self.report_researcher[report_id]

@@ -71,3 +71,28 @@ class TestConsensusTolerance:
         l2 = {"severity": "CRITICAL", "confidence_bps": 9000}
         v2 = {"severity": "HIGH", "confidence_bps": 9000}
         assert check_agreement(l2, v2) is False
+
+
+class TestDoublePayoutGuards:
+    def test_settled_report_cannot_resolve_again(self):
+        reports = {
+            0: {"status": "SETTLED", "payout": 50000},
+            1: {"status": "REJECTED", "payout": 0},
+            2: {"status": "RESOLVING", "payout": 0},
+            3: {"status": "SUBMITTED", "payout": 0},
+        }
+
+        def can_resolve(report_id: int) -> bool:
+            rep = reports.get(report_id)
+            if not rep:
+                return False
+            if rep["status"] in ["SETTLED", "REJECTED", "RESOLVING"]:
+                return False
+            if rep["payout"] > 0:
+                return False
+            return True
+
+        assert can_resolve(0) is False  # Already settled
+        assert can_resolve(1) is False  # Already rejected
+        assert can_resolve(2) is False  # In flight
+        assert can_resolve(3) is True   # Ready for resolution

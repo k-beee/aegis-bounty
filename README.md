@@ -56,7 +56,7 @@ pytest tests/ -v
 
 | Contract | Role | Address | Explorer Link |
 | :--- | :--- | :--- | :--- |
-| **AegisBounty** | Core Bug Bounty Vault | `0x0c88a8916A09464d00f265fe6349E4C13EF7296c` | [View on Explorer](https://explorer-studio.genlayer.com/address/0x0c88a8916A09464d00f265fe6349E4C13EF7296c) |
+| **AegisBounty** | Core Bug Bounty Vault | `0x76AdC982655E37a60a6681936Ba7306390c6a5Ea` | [View on Explorer](https://explorer-studio.genlayer.com/address/0x76AdC982655E37a60a6681936Ba7306390c6a5Ea) |
 | **AegisBountyFactory** | Multi-Vault Registry | `0xf3696DF739f725951DaEC63488FB5D9B1719Ee50` | [View on Explorer](https://explorer-studio.genlayer.com/address/0xf3696DF739f725951DaEC63488FB5D9B1719Ee50) |
 
 ---

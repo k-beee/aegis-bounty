@@ -72,7 +72,7 @@ export default function Home() {
   const [account, setAccount] = useState<string | null>(null);
 
   // Deployed Contract Addresses on StudioNet
-  const arbiterAddress = "0x0c88a8916A09464d00f265fe6349E4C13EF7296c";
+  const arbiterAddress = "0x76AdC982655E37a60a6681936Ba7306390c6a5Ea";
   const factoryAddress = "0xf3696DF739f725951DaEC63488FB5D9B1719Ee50";
 
   // Vault state
